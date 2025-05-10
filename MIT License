@@ -1,0 +1,40 @@
+
+---
+
+## **💻 Основной код**  
+
+### **1. Главный файл (`src/index.js`)**  
+```javascript
+const { VK } = require('vk-io');
+const config = require('../config.json');
+const db = require('./db/database');
+
+const vk = new VK({
+  token: config.token,
+});
+
+// Подключение к БД
+db.connect(config.mysql);
+
+// Обработка команды "!заказ"
+vk.updates.on('message_new', async (context) => {
+  if (context.text === '!заказ') {
+    const [order] = await db.query(
+      'INSERT INTO orders (user_id, status) VALUES (?, "pending") RETURNING id',
+      [context.senderId]
+    );
+
+    await context.send(`
+      🛒 Ваш заказ #${order.id} оформлен!
+      💳 Оплатите: !оплата ${order.id}
+    `);
+  }
+
+  if (context.text.startsWith('!оплата')) {
+    const orderId = context.text.split(' ')[1];
+    await db.query('UPDATE orders SET status = "paid" WHERE id = ?', [orderId]);
+    await context.send('✅ Оплата прошла успешно!');
+  }
+});
+
+vk.updates.start().catch(console.error);
